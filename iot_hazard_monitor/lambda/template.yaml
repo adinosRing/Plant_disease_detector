@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  Hazard monitor backend - receives signed MQ2/DHT11 events from ESP32 devices,
+  Hazard monitor backend - receives signed MQ2/DHT22 events from ESP32 devices,
   de-duplicates them in DynamoDB and sends alerts through SNS (email / SMS).
 
 Parameters:

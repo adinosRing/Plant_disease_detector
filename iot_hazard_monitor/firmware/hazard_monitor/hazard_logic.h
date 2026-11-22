@@ -26,10 +26,10 @@ struct Thresholds {
   // MQ2 smoke-equivalent concentration (ppm). Clean air reads ~10-30 ppm.
   float gasWarnPpm  = 300.0f;
   float gasAlarmPpm = 1000.0f;
-  // Absolute temperature (deg C). DHT11 range is 0-50 C, so ALARM at 50
-  // effectively means "sensor pegged at its maximum".
-  float tempWarnC  = 40.0f;
-  float tempAlarmC = 50.0f;
+  // Absolute temperature (deg C). The DHT22 reads up to 80 C; 57 C is the
+  // usual rating of fixed-temperature heat detectors.
+  float tempWarnC  = 45.0f;
+  float tempAlarmC = 57.0f;
   // Rate of rise (deg C per minute) over `riseWindowMs`.
   float riseWarnCPerMin  = 4.0f;
   float riseAlarmCPerMin = 8.0f;

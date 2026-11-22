@@ -1,7 +1,7 @@
 // Smoke / gas + temperature hazard monitor for ESP32.
 //
 //   MQ2  -> smoke / combustible-gas index (ppm, smoke-equivalent)
-//   DHT11 -> temperature (absolute + rate of rise) and humidity
+//   DHT22 -> temperature (absolute + rate of rise) and humidity
 //   Buzzer -> intermittent chirp on WARNING, ISO 8201 "temporal-3" on ALARM
 //   AWS Lambda -> signed HTTPS event for every level change, sensor fault,
 //                 and a reminder every few minutes while an ALARM persists.
@@ -180,7 +180,7 @@ void sampleAndEvaluate(uint32_t now) {
   hazard::Sample s;
   s.tMs = now;
 
-  // --- DHT11
+  // --- DHT22
   float t = dht.readTemperature();
   float h = dht.readHumidity();
   if (isnan(t) || isnan(h)) {

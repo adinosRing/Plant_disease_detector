@@ -13,7 +13,7 @@
 #define PIN_SILENCE_BTN   27   // momentary to GND, internal pull-up. -1 = none
 #define PIN_STATUS_LED    2    // on-board LED on most dev boards. -1 = none
 
-#define DHT_SENSOR_TYPE   DHT11  // change to DHT22 for a 0-80 C range
+#define DHT_SENSOR_TYPE   DHT22  // AM2302: -40..80 C, 0.1 C resolution
 
 // true  = passive piezo (driven with a tone)
 // false = active buzzer module (just switched on/off)
@@ -35,13 +35,13 @@
 // See hazard::Thresholds in hazard_logic.h for the defaults and meanings.
 #define GAS_WARN_PPM          300.0f
 #define GAS_ALARM_PPM         1000.0f
-#define TEMP_WARN_C           40.0f
-#define TEMP_ALARM_C          50.0f
+#define TEMP_WARN_C           45.0f
+#define TEMP_ALARM_C          57.0f   // common fixed-temperature heat-detector rating
 #define RISE_WARN_C_PER_MIN   4.0f
 #define RISE_ALARM_C_PER_MIN  8.0f
 
 // ---------------------------------------------------------------------- Timing
-#define SAMPLE_PERIOD_MS      2000UL            // DHT11 allows at most 1 Hz
+#define SAMPLE_PERIOD_MS      2000UL            // DHT22 needs >= 2 s between reads
 #define DHT_FAULT_AFTER       5                 // consecutive failed reads
 #define ALARM_REMINDER_MS     (5UL * 60UL * 1000UL)  // re-notify while ALARM persists
 #define SILENCE_MS            (5UL * 60UL * 1000UL)  // buzzer hush duration

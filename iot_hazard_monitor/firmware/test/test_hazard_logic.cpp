@@ -89,12 +89,16 @@ static void test_flapping_reset() {
 
 static void test_temperature_levels() {
   Evaluator e;
-  e.update(mk(0, 20, 42));
-  auto a = e.update(mk(120000, 20, 42));  // far apart: no rate-of-rise
+  e.update(mk(0, 20, 46));
+  auto a = e.update(mk(120000, 20, 46));  // far apart: no rate-of-rise
   CHECK(a.level == Level::WARNING);
   CHECK(a.reasons & hazard::REASON_TEMP_WARN);
-  e.update(mk(240000, 20, 51));
-  a = e.update(mk(360000, 20, 51));
+  // 55 C is past the DHT11's 50 C limit but still only WARNING on a DHT22.
+  e.update(mk(240000, 20, 55));
+  a = e.update(mk(360000, 20, 55));
+  CHECK(a.level == Level::WARNING);
+  e.update(mk(480000, 20, 58));
+  a = e.update(mk(600000, 20, 58));
   CHECK(a.level == Level::ALARM);
   CHECK(a.reasons & hazard::REASON_TEMP_ALARM);
 }
@@ -106,12 +110,23 @@ static void test_rate_of_rise() {
   bool sawRise = false;
   for (uint32_t t = 0; t <= 60000; t += 2000) {
     float temp = 25.0f + 10.0f * t / 60000.0f;
-    auto a = e.update(mk(t, 20, floorf(temp)));  // DHT11: whole degrees
+    auto a = e.update(mk(t, 20, roundf(temp * 10) / 10));  // DHT22: 0.1 C steps
     if (a.reasons & hazard::REASON_RISE_ALARM) sawRise = true;
     last = a.level;
   }
   CHECK(sawRise);
   CHECK(last == Level::ALARM);
+}
+
+static void test_slow_warm_up_is_not_a_rise() {
+  // A sunny room warming 0.1 C every 30 s (0.2 C/min) must stay NORMAL.
+  Evaluator e;
+  Level worst = Level::NORMAL;
+  for (uint32_t t = 0; t <= 600000; t += 2000) {
+    auto a = e.update(mk(t, 20, 25.0f + 0.1f * (t / 30000)));
+    if (a.level > worst) worst = a.level;
+  }
+  CHECK(worst == Level::NORMAL);
 }
 
 static void test_no_rise_before_min_span() {
@@ -124,8 +139,8 @@ static void test_no_rise_before_min_span() {
 
 static void test_combined_gas_and_heat_is_alarm() {
   Evaluator e;
-  e.update(mk(0, 400, 41));
-  auto a = e.update(mk(120000, 400, 41));
+  e.update(mk(0, 400, 46));
+  auto a = e.update(mk(120000, 400, 46));
   CHECK(a.level == Level::ALARM);
   CHECK(a.reasons & hazard::REASON_COMBINED);
 }
@@ -186,6 +201,7 @@ int main() {
       {"flapping_reset", test_flapping_reset},
       {"temperature_levels", test_temperature_levels},
       {"rate_of_rise", test_rate_of_rise},
+      {"slow_warm_up_is_not_a_rise", test_slow_warm_up_is_not_a_rise},
       {"no_rise_before_min_span", test_no_rise_before_min_span},
       {"combined_gas_and_heat_is_alarm", test_combined_gas_and_heat_is_alarm},
       {"invalid_sensors_ignored", test_invalid_sensors_ignored},

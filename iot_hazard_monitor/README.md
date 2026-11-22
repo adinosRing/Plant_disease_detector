@@ -1,17 +1,18 @@
-# IoT Hazard Monitor (MQ2 + DHT11 → buzzer + AWS Lambda alerts)
+# IoT Hazard Monitor (MQ2 + DHT22 → buzzer + AWS Lambda alerts)
 
-An ESP32 watches a **MQ2** smoke/combustible-gas sensor and a **DHT11**
-temperature/humidity sensor. When it detects a possible hazard it **sounds a
+An ESP32 watches a **MQ2** smoke/combustible-gas sensor and a **DHT22**
+(AM2302) temperature/humidity sensor. When it detects a possible hazard it **sounds a
 buzzer** on the spot and **sends a signed event to AWS Lambda**. Lambda records
 the event and sends an **email and/or SMS through Amazon SNS**.
 
 > ⚠️ This is a hobby early-warning project, **not** a certified smoke or gas
 > alarm. Keep certified detectors installed. MQ-series sensors are not
-> selective or factory-calibrated, and the DHT11 only measures 0–50 °C.
+> selective or factory-calibrated, and the DHT22 (−40–80 °C) responds to
+> temperature changes over tens of seconds, not instantly.
 
 ```
  MQ2 ──AO─(divider)─▶ GPIO34 ┐                       HTTPS + HMAC
- DHT11 ──DATA───────▶ GPIO4  ├─ ESP32 ─── Wi-Fi ──▶ Lambda Function URL
+ DHT22 ──DATA───────▶ GPIO4  ├─ ESP32 ─── Wi-Fi ──▶ Lambda Function URL
  Silence button ────▶ GPIO27 │      │                   │  ├─▶ DynamoDB (dedupe + history)
                              │      └─▶ GPIO25 ─▶ Buzzer │  └─▶ SNS ─▶ email (all events)
                              └ on-board LED mirrors buzzer          └─▶ SMS (ALARM only)
@@ -24,7 +25,7 @@ Each sample (every 2 s) is classed as NORMAL, WARNING or ALARM:
 | Signal | WARNING | ALARM |
 |---|---|---|
 | MQ2 smoke-equivalent index | ≥ 300 ppm | ≥ 1000 ppm |
-| Temperature | ≥ 40 °C | ≥ 50 °C (DHT11 maximum) |
+| Temperature | ≥ 45 °C | ≥ 57 °C (usual fixed heat-detector rating) |
 | Rate of rise (over 60 s) | ≥ 4 °C/min | ≥ 8 °C/min |
 | Smoke/gas ≥ warning **and** heat (temp or rise ≥ warning) | | ALARM (`COMBINED`, likely fire) |
 
@@ -64,7 +65,7 @@ de-duplicated in DynamoDB and you get one notification per event.
 |---|---|
 | ESP32 dev board | any board with the Arduino-ESP32 core 2.x or 3.x |
 | MQ2 module | runs from **5 V** (heater draws about 150 mA) |
-| DHT11 module | 3.3 V. Use the 3-pin module, or add a 10 kΩ pull-up on DATA if you use the bare sensor |
+| DHT22 / AM2302 module | 3.3 V. The 3-pin module has a pull-up; with the bare 4-pin sensor add 10 kΩ from DATA to 3V3 and leave pin 3 unconnected |
 | Buzzer | 5 V active buzzer (or a passive piezo with `BUZZER_PASSIVE true`) |
 | NPN transistor (2N2222/BC547) + 1 kΩ | to drive the buzzer |
 | 10 kΩ + 20 kΩ resistors | voltage divider for MQ2 AO |
@@ -76,7 +77,7 @@ de-duplicated in DynamoDB and you get one notification per event.
 |---|---|
 | MQ2 VCC / GND | 5V (VIN) / GND |
 | MQ2 AO | 10 kΩ → **GPIO34**, and GPIO34 → 20 kΩ → GND |
-| DHT11 VCC / GND / DATA | 3V3 / GND / **GPIO4** |
+| DHT22 VCC / GND / DATA | 3V3 / GND / **GPIO4** |
 | GPIO25 | 1 kΩ → transistor base. Emitter → GND. Collector → buzzer −. Buzzer + → 5V |
 | Button | **GPIO27** ↔ GND (internal pull-up is used) |
 
