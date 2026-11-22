@@ -1,0 +1,141 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Hazard monitor backend - receives signed MQ2/DHT11 events from ESP32 devices,
+  de-duplicates them in DynamoDB and sends alerts through SNS (email / SMS).
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Description: Email address that receives all alerts (confirm the SNS subscription email).
+  AlertPhoneNumber:
+    Type: String
+    Default: ""
+    Description: Optional E.164 phone number (e.g. +15551234567) that gets SMS for ALARM events only.
+  AllowedDeviceIds:
+    Type: String
+    Default: ""
+    Description: Optional comma-separated allow-list of device ids. Empty = any device holding the key.
+  NotifyOnBoot:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+  EventRetentionDays:
+    Type: Number
+    Default: 30
+
+Conditions:
+  HasPhone: !Not [!Equals [!Ref AlertPhoneNumber, ""]]
+
+Resources:
+  SigningSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: HMAC key shared with hazard monitor devices (SIGNING_SECRET in secrets.h)
+      GenerateSecretString:
+        PasswordLength: 48
+        ExcludePunctuation: true
+
+  EventsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: event_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: event_id
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Hazard Monitor
+
+  EmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AlertTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
+  SmsSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasPhone
+    Properties:
+      TopicArn: !Ref AlertTopic
+      Protocol: sms
+      Endpoint: !Ref AlertPhoneNumber
+      FilterPolicy:
+        level: ["ALARM"]
+
+  HazardEventFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: handler.lambda_handler
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 256
+      Timeout: 10
+      Environment:
+        Variables:
+          ALERT_TOPIC_ARN: !Ref AlertTopic
+          EVENTS_TABLE: !Ref EventsTable
+          SIGNING_SECRET_ARN: !Ref SigningSecret
+          ALLOWED_DEVICE_IDS: !Ref AllowedDeviceIds
+          NOTIFY_ON_BOOT: !Ref NotifyOnBoot
+          EVENT_RETENTION_DAYS: !Ref EventRetentionDays
+          MAX_CLOCK_SKEW_SECONDS: "300"
+      Policies:
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt AlertTopic.TopicName
+        - Statement:
+            - Effect: Allow
+              Action: [dynamodb:PutItem, dynamodb:DeleteItem]
+              Resource: !GetAtt EventsTable.Arn
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref SigningSecret
+      # Public HTTPS endpoint; every request is authenticated by HMAC in code.
+      FunctionUrlConfig:
+        AuthType: NONE
+
+  HazardEventFunctionLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${HazardEventFunction}
+      RetentionInDays: 30
+
+  # Tells you if the backend itself is failing (e.g. SNS or Secrets Manager errors).
+  FunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Hazard monitor Lambda is returning errors
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref HazardEventFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlertTopic]
+
+Outputs:
+  FunctionUrl:
+    Description: Put this in LAMBDA_URL in firmware/hazard_monitor/secrets.h
+    Value: !GetAtt HazardEventFunctionUrl.FunctionUrl
+  SigningSecretArn:
+    Description: Read the device key with `aws secretsmanager get-secret-value --secret-id <arn>`
+    Value: !Ref SigningSecret
+  AlertTopicArn:
+    Value: !Ref AlertTopic
+  EventsTableName:
+    Value: !Ref EventsTable

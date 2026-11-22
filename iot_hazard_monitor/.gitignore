@@ -1,0 +1,6 @@
+firmware/hazard_monitor/secrets.h
+firmware/test/test_hazard_logic
+lambda/.aws-sam/
+samconfig.toml
+__pycache__/
+.pytest_cache/
